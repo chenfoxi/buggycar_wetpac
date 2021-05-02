@@ -1,0 +1,7 @@
+.vscode/
+*.pyc
+__pycache__/
+report.xml
+.pytest_cache/
+*.log
+env/

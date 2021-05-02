@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 02-May-2021 at 23:05:28 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>/Library/Java/JavaVirtualMachines/jdk1.8.0_20.jdk/Contents/Home</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.10.0", "pytest": "6.2.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Darwin-20.3.0-x86_64-i386-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"bdd": "4.0.2", "html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.7</td></tr></table>
+    <h2>Summary</h2>
+    <p>31 tests ran in 155.48 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">24 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">7 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_home.py::test_go_to_popular_make_page_and_go_back</td>
+          <td class="col-duration">3.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_go_to_popular_make_page_and_go_back&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>getBrowser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;7b5d8a5239f529430857d3466e37fe57&quot;)&gt;<br/>home_page = &lt;page_components.home.HomePage object at 0x109420e90&gt;<br/><br/>    @then(&#x27;ckick home logo can go back&#x27;)<br/>    def go_back_home(getBrowser, home_page):<br/>        home_page.goTo_home()<br/>&gt;       assert getBrowser.current_url == Constants.get_buggycar_host()<br/><span class="error">E       AssertionError: assert &#x27;https://bugg...gagshpkqbsuag&#x27; == &#x27;https://bugg...sttestit.org/&#x27;</span><br/><span class="error">E         - https://buggy.justtestit.org/</span><br/><span class="error">E         + https://buggy.justtestit.org/make/c0bm09bgagshpkqbsuag</span><br/><br/>tests/step_defs/test_home.py:52: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_sort_orverall_rating_by_rank</td>
+          <td class="col-duration">4.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_sort_orverall_rating_by_rank&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>overall_page = &lt;page_components.overall.OverallPage object at 0x109507690&gt;<br/><br/>    @then(&#x27;rating show according the rank ascending&#x27;)<br/>    def check_rank_sort(overall_page):<br/>        first_rank = overall_page.get_value_rank(1)<br/>        second_rank = overall_page.get_value_rank(2)<br/>        assert first_rank == &#x27;1&#x27;<br/>&gt;       assert second_rank == &#x27;2&#x27;<br/><span class="error">E       AssertionError: assert &#x27;10&#x27; == &#x27;2&#x27;</span><br/><span class="error">E         - 2</span><br/><span class="error">E         + 10</span><br/><br/>tests/step_defs/test_overall.py:84: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_go_to_a_certain_page_by_inputing_number[5]</td>
+          <td class="col-duration">4.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_go_to_a_certain_page_by_inputing_number[5]&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>page_component = &lt;page_components.page.PageComponent object at 0x1094f0810&gt;, num = &#x27;5&#x27;<br/><br/>    @then(&#x27;go to the &lt;num&gt; page&#x27;)<br/>    def check_goTo_num_page(page_component, num):<br/>        actual_msg = page_component.get_pag_msg()<br/>&gt;       assert actual_msg == &#x27;« » page &#x27; + num + &#x27; of 5&#x27;<br/><span class="error">E       AssertionError: assert &#x27;« » page 1 of 5&#x27; == &#x27;« » page 5 of 5&#x27;</span><br/><span class="error">E         - « » page 5 of 5</span><br/><span class="error">E         ?          ^</span><br/><span class="error">E         + « » page 1 of 5</span><br/><span class="error">E         ?          ^</span><br/><br/>tests/step_defs/test_overall.py:103: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_correctly_update_the_users_info[tchenChange-newName-reg-Male-address-1234-Reading-Abc!123456-20-The profile has been saved successful]</td>
+          <td class="col-duration">14.48</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_correctly_update_the_users_info[tchenChange-newName-reg-Male-address-1234-Reading-Abc!123456-20-The profile has been saved successful]&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>tests/step_defs/test_profile.py:85: in profile_success_info<br/>    result = profile_page.get_success_info()<br/>tests/page_components/profile.py:45: in get_success_info<br/>    element = self.__get_success_info_element()<br/>tests/page_components/profile.py:209: in __get_success_info_element<br/>    return self.browser.find_element(By.CSS_SELECTOR, self.SUCCESS_INFO_CSS)<br/>env/lib/python3.7/site-packages/selenium/webdriver/remote/webdriver.py:978: in find_element<br/>    &#x27;value&#x27;: value})[&#x27;value&#x27;]<br/>env/lib/python3.7/site-packages/selenium/webdriver/remote/webdriver.py:321: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x1094f0a10&gt;<br/>response = {&#x27;status&#x27;: 404, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;no such element&quot;,&quot;message&quot;:&quot;no such element: Unable to locate element: {\...fff20408950 _pthread_start + 224\\n20  libsystem_pthread.dylib             0x00007fff2040447b thread_start + 15\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response):<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if status is None or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, basestring):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if status is None:<br/>                        status = value[&quot;status&quot;]<br/>                        message = value[&quot;value&quot;]<br/>                        if not isinstance(message, basestring):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class = ErrorInResponseException<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if value == &#x27;&#x27; or value is None:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, basestring):<br/>            if exception_class == ErrorInResponseException:<br/>                raise exception_class(response, value)<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        if &#x27;stackTrace&#x27; in value and value[&#x27;stackTrace&#x27;]:<br/>            stacktrace = []<br/>            try:<br/>                for frame in value[&#x27;stackTrace&#x27;]:<br/>                    line = self._value_or_default(frame, &#x27;lineNumber&#x27;, &#x27;&#x27;)<br/>                    file = self._value_or_default(frame, &#x27;fileName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if line:<br/>                        file = &quot;%s:%s&quot; % (file, line)<br/>                    meth = self._value_or_default(frame, &#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                    if &#x27;className&#x27; in frame:<br/>                        meth = &quot;%s.%s&quot; % (frame[&#x27;className&#x27;], meth)<br/>                    msg = &quot;    at %s (%s)&quot;<br/>                    msg = msg % (meth, file)<br/>                    stacktrace.append(msg)<br/>            except TypeError:<br/>                pass<br/>        if exception_class == ErrorInResponseException:<br/>            raise exception_class(response, message)<br/>        elif exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;css selector&quot;,&quot;selector&quot;:&quot;[class=&#x27;result alert alert-success hidden-md-down&#x27;]&quot;}</span><br/><span class="error">E         (Session info: chrome=90.0.4430.93)</span><br/><br/>env/lib/python3.7/site-packages/selenium/webdriver/remote/errorhandler.py:242: NoSuchElementException<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_register_new_user_using_valid_info[registerTesti-foxi-reg-Abc!123456-Abc!123456-Registration is successful]</td>
+          <td class="col-duration">3.93</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_register_new_user_using_valid_info[registerTesti-foxi-reg-Abc!123456-Abc!123456-Registration is successful]&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>register_page = &lt;page_components.register.RegisterPage object at 0x109532990&gt;<br/><br/>    @then(&#x27;register btn is disabled&#x27;)<br/>    def check_register_btn_disabled(register_page):<br/>        btn_status = register_page.check_reg_btn_enabled()<br/>&gt;       assert btn_status == False<br/><span class="error">E       assert True == False</span><br/><br/>tests/step_defs/test_register.py:90: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_register_new_user_but_usernames_existed[tchen-foxi-reg-Abc!123456-Abc!123456-User already exists]</td>
+          <td class="col-duration">3.72</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_register_new_user_but_usernames_existed[tchen-foxi-reg-Abc!123456-Abc!123456-User already exists]&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>register_page = &lt;page_components.register.RegisterPage object at 0x1094fe990&gt;, error = &#x27;User already exists&#x27;<br/><br/>    @then(&#x27;register unsuccessfully and error message &lt;error&gt; is displayed&#x27;)<br/>    def check_register_unsuccess(register_page, error):<br/>        error_info = register_page.get_error_info()<br/>&gt;       assert error_info == error<br/><span class="error">E       AssertionError: assert &#x27;UsernameExis...lready exists&#x27; == &#x27;User already exists&#x27;</span><br/><span class="error">E         - User already exists</span><br/><span class="error">E         + UsernameExistsException: User already exists</span><br/><br/>tests/step_defs/test_register.py:102: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-Last Name is required-lastname]</td>
+          <td class="col-duration">3.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">request = &lt;FixtureRequest for &lt;Function test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-Last Name is required-lastname]&gt;&gt;<br/><br/>    @pytest.mark.usefixtures(*function_args)<br/>    def scenario_wrapper(request):<br/>&gt;       _execute_scenario(feature, scenario, request, encoding)<br/><br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:177: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:143: in _execute_scenario<br/>    _execute_step_function(request, scenario, step, step_func)<br/>env/lib/python3.7/site-packages/pytest_bdd/scenario.py:113: in _execute_step_function<br/>    return_value = step_func(**kwargs)<br/>tests/step_defs/test_register.py:119: in show_errorMsg_input<br/>    __check_info_and_display(state, errormsg, True)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>state = lastname_msg(text=&#x27;First Name is required&#x27;, is_displayed=True), errormsg = &#x27;Last Name is required&#x27;, is_displayed = True<br/><br/>    def __check_info_and_display(state, errormsg, is_displayed):<br/>&gt;       assert state.text == errormsg<br/><span class="error">E       AssertionError: assert &#x27;First Name is required&#x27; == &#x27;Last Name is required&#x27;</span><br/><span class="error">E         - Last Name is required</span><br/><span class="error">E         ? ^^</span><br/><span class="error">E         + First Name is required</span><br/><span class="error">E         ? ^^^</span><br/><br/>tests/step_defs/test_register.py:130: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_home.py::test_go_to_popular_model_page_and_go_back</td>
+          <td class="col-duration">3.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_home.py::test_go_to_overall_rating_page_and_go_back</td>
+          <td class="col-duration">2.95</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_login.py::test_correct_username_and_password[tchen-Abc!123456-foxi]</td>
+          <td class="col-duration">3.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>Exception ignored in: &lt;socket.socket fd=13, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 59986), raddr=(&#x27;127.0.0.1&#x27;, 59980)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=13, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 59986), raddr=(&#x27;127.0.0.1&#x27;, 59980)&gt;
+Exception ignored in: &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60011), raddr=(&#x27;127.0.0.1&#x27;, 60005)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60011), raddr=(&#x27;127.0.0.1&#x27;, 60005)&gt;
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_login.py::test_login_with_incorrect_username_and_password[nouser-wrongpassword]</td>
+          <td class="col-duration">3.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_login.py::test_login_with_incorrect_username_and_password[tchen-%adminstrator]</td>
+          <td class="col-duration">3.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_login.py::test_user_logout[tchen-Abc!123456]</td>
+          <td class="col-duration">13.70</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_show_orverall_rating_list_correctly</td>
+          <td class="col-duration">4.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_go_to_a_model_page_through_clicking_view_more[1]</td>
+          <td class="col-duration">3.81</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_go_to_next_page_by_right_arrow</td>
+          <td class="col-duration">3.81</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_overall.py::test_go_to_previous_page_by_left_arrow</td>
+          <td class="col-duration">3.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_the_users_profile_can_be_displayed_correctly[tchen-foxi-chen-Abc!123456-----]</td>
+          <td class="col-duration">4.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_can_correctly_change_the_users_password[tchenPwd-Abc!1234567-Abc!1234567-Abc!123456-The profile has been saved successful]</td>
+          <td class="col-duration">5.55</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_show_error_msg_when_erase_exsiting_input_info[tchen-Abc!123456-First Name is required-firstname]</td>
+          <td class="col-duration">3.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_show_error_msg_when_erase_exsiting_input_info[tchen-Abc!123456-Last Name is required-lastname]</td>
+          <td class="col-duration">4.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_profile.py::test_show_error_msg_when_password_does_not_match[tchen-Abc!123456-Abc!123456-Abc!12345-Passwords do not match]</td>
+          <td class="col-duration">3.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>Exception ignored in: &lt;socket.socket fd=13, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60275), raddr=(&#x27;127.0.0.1&#x27;, 60269)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=13, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60275), raddr=(&#x27;127.0.0.1&#x27;, 60269)&gt;
+Exception ignored in: &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60294), raddr=(&#x27;127.0.0.1&#x27;, 60289)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60294), raddr=(&#x27;127.0.0.1&#x27;, 60289)&gt;
+Exception ignored in: &lt;socket.socket fd=17, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60313), raddr=(&#x27;127.0.0.1&#x27;, 60308)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=17, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60313), raddr=(&#x27;127.0.0.1&#x27;, 60308)&gt;
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_without_username_cannot_register[foxi-reg-Abc!123456-Abc!123456]</td>
+          <td class="col-duration">3.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_password_does_not_match[regRandom-foxi-reg-Abc!123456-Abc!12345-Passwords do not match]</td>
+          <td class="col-duration">3.27</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-Login is required-username]</td>
+          <td class="col-duration">3.30</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-First Name is required-firstname]</td>
+          <td class="col-duration">3.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>Exception ignored in: &lt;socket.socket fd=17, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60418), raddr=(&#x27;127.0.0.1&#x27;, 60412)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=17, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60418), raddr=(&#x27;127.0.0.1&#x27;, 60412)&gt;
+Exception ignored in: &lt;socket.socket fd=18, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60433), raddr=(&#x27;127.0.0.1&#x27;, 60428)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=18, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60433), raddr=(&#x27;127.0.0.1&#x27;, 60428)&gt;
+Exception ignored in: &lt;socket.socket fd=20, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60451), raddr=(&#x27;127.0.0.1&#x27;, 60445)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=20, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60451), raddr=(&#x27;127.0.0.1&#x27;, 60445)&gt;
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-Password is required-password]</td>
+          <td class="col-duration">3.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_register.py::test_show_error_msg_when_erase_exsiting_input_info[regRandom-foxi-reg-Abc!123456-Abc!123456-Passwords do not match-confirm]</td>
+          <td class="col-duration">3.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_vote.py::test_logined_user_vote_a_model_and_add_comment[testABC-chen]</td>
+          <td class="col-duration">7.89</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_vote.py::test_logined_user_vote_a_model_without_comment[chen]</td>
+          <td class="col-duration">7.83</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stderr call------------------------------ <br/>Exception ignored in: &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60505), raddr=(&#x27;127.0.0.1&#x27;, 60500)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=16, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60505), raddr=(&#x27;127.0.0.1&#x27;, 60500)&gt;
+Exception ignored in: &lt;socket.socket fd=18, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60522), raddr=(&#x27;127.0.0.1&#x27;, 60517)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=18, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60522), raddr=(&#x27;127.0.0.1&#x27;, 60517)&gt;
+Exception ignored in: &lt;socket.socket fd=20, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60550), raddr=(&#x27;127.0.0.1&#x27;, 60536)&gt;
+ResourceWarning: unclosed &lt;socket.socket fd=20, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=(&#x27;127.0.0.1&#x27;, 60550), raddr=(&#x27;127.0.0.1&#x27;, 60536)&gt;
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/step_defs/test_vote.py::test_no_login_user_cannot_vote</td>
+          <td class="col-duration">13.46</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
